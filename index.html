@@ -117,6 +117,10 @@ h3{font-size:14px;margin:0 0 12px;font-weight:700}
 .kpi.bad .ic{background:var(--bad-soft);color:var(--bad)}
 .kpi .l{color:var(--mute);font-size:12.5px;font-weight:500}.kpi .v{font-size:clamp(17px,2.4vw,21px);font-weight:750;letter-spacing:-.02em;font-variant-numeric:tabular-nums}.kpi .s{color:var(--mute);font-size:12px}
 .pos{color:var(--brand)}.neg{color:var(--bad)}.m{color:var(--mute)}.note{color:var(--mute);font-size:12.5px}
+.alert{background:#fff2d1;color:#7a5200;border:1px solid #f0d28a;border-radius:14px;padding:11px 14px;font-size:13.5px}
+:root[data-theme=dark] .alert{background:#3a2e10;color:#f3c969;border-color:#5a4718}
+.chk{display:flex;gap:9px;align-items:center;font-size:14px;color:var(--ink);cursor:pointer}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--brand);flex:none}
 .num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .btn{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:0;border-radius:13px;padding:11px 18px;font-weight:650;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 16px rgba(20,160,90,.28);transition:.2s var(--ease)}
 .btn:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(20,160,90,.35)}.btn:active{transform:scale(.97)}
@@ -331,7 +335,8 @@ function simulate(inv,p){
     else if(inv.pagamento==='amort'){jp=juros;A=bal/left;bp=basis/left;bal-=A;basis-=bp}
     else{jp=juros;if(last){A=bal;bp=basis;bal=0}}
     const bruto=jp+A,rend=bruto-bp,aliq=inv.ir==='isento'?0:irRate(days(start,date)),ir=Math.max(0,rend)*aliq;
-    items.push({date,inv,bruto,principal:bp,rend,aliq,ir,liquido:bruto-ir,past:date<TODAY});
+    const late=!!inv.pendente&&last&&date<TODAY;if(late)valueNow=bruto;
+    items.push({date,inv,bruto,principal:bp,rend,aliq,ir,liquido:bruto-ir,past:date<TODAY&&!late,late});
     prev=date;
   });
   return{items,valueNow:valueNow??0};
@@ -340,7 +345,7 @@ function portfolio(){
   const p=P(),all=[],sims={};
   INVS.forEach((inv,i)=>{inv._c=COLORS[i%COLORS.length];const s=simulate(inv,p);sims[inv.id]=s;all.push(...s.items)});
   all.sort((a,b)=>a.date-b.date);
-  return{all,fut:all.filter(x=>!x.past),past:all.filter(x=>x.past),sims};
+  return{all,fut:all.filter(x=>!x.past&&!x.late),late:all.filter(x=>x.late),past:all.filter(x=>x.past),sims};
 }
 function monthList(count){const d=new Date(TODAY);let y=d.getUTCFullYear(),m=d.getUTCMonth();const o=[];for(let i=0;i<count;i++)o.push(`${y+Math.floor((m+i)/12)}-${String((m+i)%12+1).padStart(2,'0')}`);return o}
 const bucket=(arr,months)=>{const m={};months.forEach(k=>m[k]=[]);arr.forEach(it=>{const k=monthKey(it.date);if(m[k])m[k].push(it)});return m};
@@ -397,11 +402,12 @@ function emptyState(){return`<div class="card empty view">${ico('wallet','big')}
 const quando=d=>{const n=days(TODAY,d);return n<=0?'hoje':n===1?'amanhã':`em ${n} dias`};
 function viewResumo(){
   if(!INVS.length)return emptyState();
-  const{fut,past,sims}=portfolio();
+  const{fut,past,late,sims}=portfolio();
+  const allf=fut.concat(late),lateTot=sum(late,x=>x.liquido);
   const invested=sum(INVS,i=>i.valor),atual=sum(INVS,i=>sims[i.id].valueNow);
   const recebido=sum(past,x=>x.liquido);
   const months=monthList(horizon),b=bucket(fut,months);
-  const totalLiq=sum(fut,x=>x.liquido),totalRend=sum(fut,x=>x.rend-x.ir),totalCap=sum(fut,x=>x.principal),totalIR=sum(fut,x=>x.ir);
+  const totalLiq=sum(allf,x=>x.liquido),totalRend=sum(allf,x=>x.rend-x.ir),totalCap=sum(allf,x=>x.principal),totalIR=sum(allf,x=>x.ir);
   const lastD=fut.length?fut[fut.length-1].date:null,nd=fut.length?fut[0].date:null;
   const nextTotal=nd==null?0:sum(fut.filter(x=>x.date===nd),x=>x.liquido);
   const thisM=sum(b[months[0]]||[],x=>x.liquido),nextM=sum(b[months[1]]||[],x=>x.liquido);
@@ -419,6 +425,7 @@ function viewResumo(){
       <div><div class="lab">Total que vou receber</div><div class="big2">${cnt(totalLiq)}</div><div class="sub">${lastD?'até '+MES[new Date(lastD).getUTCMonth()]+'/'+new Date(lastD).getUTCFullYear()+' · ':''}já sem I.R.<br>renda ${BRL(totalRend)} + capital ${BRL(totalCap)}</div></div>
     </div>
     <div class="mini"><div><small>Este mês · ${MES[_n.getMonth()]}</small><b>${cnt(thisM)}</b></div><div><small>Mês que vem</small><b>${cnt(nextM)}</b></div></div></section>
+  ${late.length?`<div class="alert">⚠ Vencido e ainda não recebido: <b>${BRL(lateTot)}</b> (${late.length} investimento${late.length>1?'s':''}). Já está somado no total que vou receber.</div>`:''}
   <div class="grid k4 stagger">
     <div class="card kpi hover" style="--i:0"><div class="ic">${ico('trend')}</div><div class="l">Patrimônio atual (bruto)</div><div class="v">${cnt(atual)}</div><div class="s">${BRL(invested)} investidos</div></div>
     <div class="card kpi hover" style="--i:1"><div class="ic">${ico('cash')}</div><div class="l">Já recebido (líquido)</div><div class="v">${cnt(recebido)}</div><div class="s">estimado desde o início</div></div>
@@ -436,17 +443,18 @@ function viewResumo(){
 }
 function viewProj(){
   if(!INVS.length)return emptyState();
-  const{fut}=portfolio(),n=Math.max(1,monthsToEnd(fut)),months=monthList(n),b=bucket(fut,months);
-  const series=chartSeries(months,b),t=f=>sum(fut,f);
+  const{fut,late}=portfolio(),n=Math.max(1,monthsToEnd(fut)),months=monthList(n),b=bucket(fut,months);
+  const series=chartSeries(months,b),t=f=>sum(fut,f),tt=f=>sum(fut.concat(late),f);
   const rows=months.map(k=>{const L=b[k].sort((a,c)=>a.date-c.date);
     const byD={};L.forEach(x=>{const d=iso(x.date);byD[d]=byD[d]||{liq:0,ir:0};byD[d].liq+=x.liquido;byD[d].ir+=x.ir});
     const det=Object.entries(byD).map(([d,v])=>`<div class="row"><span>${brDate(D(d))}</span><span class="num">${BRL(v.liq)}${v.ir>0?` <span class="note">(I.R. ${BRL(v.ir)})</span>`:''}</span></div>`).join('');
     return`<tr><td><details><summary>${monthLabel(k)}</summary><div style="min-width:250px;margin-top:6px;font-weight:400">${det||'<span class="note">Sem pagamentos</span>'}</div></details></td><td>${BRL(sum(L,x=>x.rend-x.ir))}</td><td class="neg">${BRL(sum(L,x=>x.ir))}</td><td>${BRL(sum(L,x=>x.principal))}</td><td><b>${BRL(sum(L,x=>x.liquido))}</b></td></tr>`}).join('');
   return`<div class="view"><div class="grid k4 stagger">
-   <div class="card kpi" style="--i:0"><div class="l">Renda líquida (juros)</div><div class="v">${cnt(t(x=>x.rend-x.ir))}</div></div>
-   <div class="card kpi bad" style="--i:1"><div class="l">I.R. retido</div><div class="v neg">${cnt(t(x=>x.ir))}</div></div>
-   <div class="card kpi" style="--i:2"><div class="l">Capital devolvido</div><div class="v">${cnt(t(x=>x.principal))}</div></div>
-   <div class="card kpi" style="--i:3"><div class="l">Total que vou receber</div><div class="v pos">${cnt(t(x=>x.liquido))}</div></div></div>
+   <div class="card kpi" style="--i:0"><div class="l">Renda líquida (juros)</div><div class="v">${cnt(tt(x=>x.rend-x.ir))}</div></div>
+   <div class="card kpi bad" style="--i:1"><div class="l">I.R. retido</div><div class="v neg">${cnt(tt(x=>x.ir))}</div></div>
+   <div class="card kpi" style="--i:2"><div class="l">Capital devolvido</div><div class="v">${cnt(tt(x=>x.principal))}</div></div>
+   <div class="card kpi" style="--i:3"><div class="l">Total que vou receber</div><div class="v pos">${cnt(tt(x=>x.liquido))}</div></div></div>
+  ${late.length?`<div class="alert">⚠ Vencido e ainda não recebido: <b>${BRL(sum(late,x=>x.liquido))}</b>. Está nos totais acima, mas fora do gráfico e da tabela mensal, que mostram só datas futuras.</div>`:''}
   <div><h2 class="sec">${ico('chart')}Mês a mês até o último vencimento</h2><div class="card"><div class="toolbar" style="margin-bottom:12px"><span class="note">Valores líquidos</span><span class="sp"></span>${capToggle()}</div>${stackedBars('c2',months,series,250)}${legend(series)}</div></div>
   <div><h2 class="sec">${ico('cal')}Detalhe por mês</h2><div class="card"><div class="scroll"><table><thead><tr><th>Mês</th><th>Renda</th><th>I.R.</th><th>Capital</th><th>Total</th></tr></thead><tbody>${rows}</tbody>
   <tfoot><tr><th>Total</th><th>${BRL(t(x=>x.rend-x.ir))}</th><th class="neg">${BRL(t(x=>x.ir))}</th><th>${BRL(t(x=>x.principal))}</th><th>${BRL(t(x=>x.liquido))}</th></tr></tfoot></table></div>
@@ -455,10 +463,10 @@ function viewProj(){
 function viewInv(){
   if(!INVS.length)return emptyState();
   const{sims}=portfolio();
-  const cards=INVS.map((inv,k)=>{const s=sims[inv.id],st=D(inv.dataInvestimento),ve=D(inv.vencimento),prog=Math.min(100,Math.max(0,(TODAY-st)/(ve-st)*100)),nx=s.items.find(x=>!x.past);
+  const cards=INVS.map((inv,k)=>{const s=sims[inv.id],st=D(inv.dataInvestimento),ve=D(inv.vencimento),prog=Math.min(100,Math.max(0,(TODAY-st)/(ve-st)*100)),nx=s.items.find(x=>!x.past&&!x.late),lt=s.items.find(x=>x.late);
     return`<div class="card inv hover" style="--c:${inv._c};--i:${k}" onclick="openDetail('${inv.id}')"><div class="hd"><div class="nm">${esc(inv.nome)}</div><div class="num"><b style="font-size:17px">${BRL(inv.valor)}</b><br><span class="note">atual ${BRL(s.valueNow)}</span></div></div>
     <div style="margin:10px 0 4px"><span class="chip">${PAG[inv.pagamento]}</span><span class="chip r-${inv.risco}">Risco ${inv.risco}</span><span class="chip">${rentText(inv)}</span><span class="chip">${inv.ir==='isento'?'Isento de I.R.':'Com I.R.'}</span><span class="chip">${inv.prazoMeses} meses</span></div>
-    <div class="row"><span class="m">Próxima parcela</span><span>${nx?brDate(nx.date)+' · <b>'+BRL(nx.liquido)+'</b>':'—'}</span></div><div class="row"><span class="m">Vencimento</span><span>${brDate(ve)}</span></div>
+    <div class="row"><span class="m">${lt?'Vencido, não recebido':'Próxima parcela'}</span><span>${lt?'<b class="neg">'+BRL(lt.liquido)+'</b> · venceu '+brDate(lt.date):nx?brDate(nx.date)+' · <b>'+BRL(nx.liquido)+'</b>':'—'}</span></div><div class="row"><span class="m">Vencimento</span><span>${brDate(ve)}</span></div>
     <div class="prog"><i style="width:${prog}%"></i></div><div class="note" style="margin-top:5px">${prog.toFixed(0)}% do prazo decorrido</div></div>`}).join('');
   return`<div class="view"><div class="toolbar"><span class="note">${INVS.length} investimentos</span><span class="sp"></span><button class="btn sec" onclick="openImport()">${ico('wallet')}Importar em massa</button></div><div class="grid two-eq stagger">${cards}</div></div>`;
 }
@@ -481,7 +489,7 @@ function viewCfg(){
 /* ============ detalhe e formulário ============ */
 function openDetail(id){
   const inv=INVS.find(i=>i.id===id),s=simulate(inv,P()),fut=s.items.filter(x=>!x.past),past=s.items.filter(x=>x.past);
-  const row=x=>`<tr><td>${brDate(x.date)}</td><td>${BRL(x.rend)}</td><td>${BRL(x.principal)}</td><td class="neg">${x.ir>0?BRL(x.ir)+' <span class="note">('+PCT(x.aliq*100)+')</span>':'isento'}</td><td><b>${BRL(x.liquido)}</b></td></tr>`;
+  const row=x=>`<tr><td>${x.late?'⚠ '+brDate(x.date)+' <span class="note">atrasado</span>':brDate(x.date)}</td><td>${BRL(x.rend)}</td><td>${BRL(x.principal)}</td><td class="neg">${x.ir>0?BRL(x.ir)+' <span class="note">('+PCT(x.aliq*100)+')</span>':'isento'}</td><td><b>${BRL(x.liquido)}</b></td></tr>`;
   dlg.innerHTML=`<div class="dlg"><div class="head"><h3>${esc(inv.nome)}</h3><button class="x" onclick="dlg.close()">${ico('x')}</button></div>
   <div><span class="chip">${PAG[inv.pagamento]}</span><span class="chip r-${inv.risco}">Risco ${inv.risco}</span><span class="chip">${rentText(inv)}</span><span class="chip">${inv.ir==='isento'?'Isento de I.R.':'Com I.R.'}</span></div>
   <div class="sum"><div><small>Investido</small><b>${BRL(inv.valor)}</b></div><div><small>Valor atual bruto</small><b>${BRL(s.valueNow)}</b></div><div><small>I.R. a ser retido</small><b class="neg">${BRL(sum(fut,x=>x.ir))}</b></div><div><small>A receber (líquido)</small><b class="pos">${BRL(sum(fut,x=>x.liquido))}</b></div></div>
@@ -493,7 +501,7 @@ function openDetail(id){
 }
 const pills=(name,opts,v,cls='')=>`<div class="pills">${opts.map(([k,l])=>`<label class="pill"><input type="radio" name="${name}" value="${k}" ${k===v?'checked':''}><span class="${cls}">${l}</span></label>`).join('')}</div>`;
 function openForm(id){
-  const v=id?INVS.find(i=>i.id===id):{nome:'',pagamento:'juros',risco:'B',prazoMeses:'',indexador:'cdi',taxa:'',ir:'regressivo',proximaParcela:'',valor:'',dataInvestimento:iso(TODAY)};
+  const v=id?INVS.find(i=>i.id===id):{nome:'',pagamento:'juros',risco:'B',prazoMeses:'',indexador:'cdi',taxa:'',ir:'regressivo',proximaParcela:'',valor:'',dataInvestimento:iso(TODAY),pendente:false};
   dlg.innerHTML=`<form class="dlg" onsubmit="return saveForm(event,'${id||''}')" oninput="prevForm(this)" onchange="prevForm(this)" novalidate><div class="head"><h3>${id?'Editar':'Novo'} investimento</h3><button type="button" class="x" onclick="dlg.close()">${ico('x')}</button></div>
   <div class="f"><label class="l">Nome (como quiser identificar)</label><input type="text" name="nome" required maxlength="80" value="${esc(v.nome)}" placeholder="Ex.: CK Construções – CRI Habitah"></div>
   <div class="f"><label class="l">Tipo de pagamento</label>${pills('pagamento',Object.entries(PAG),v.pagamento)}</div>
@@ -508,6 +516,7 @@ function openForm(id){
   <div class="f"><label class="l">Imposto de renda</label>${pills('ir',[['isento','Isento'],['regressivo','Com I.R. (automático)']],v.ir)}</div>
   <div class="f" id="boxProx"><label class="l">Próxima parcela — esse dia se repete todo mês até o fim do prazo</label><input name="proximaParcela" type="date" value="${v.proximaParcela}"></div>
   <div class="f"><label class="l">Vencimento exato (opcional — se vazio: investimento + prazo)</label><input name="vencimento" type="date" value="${id&&v.vencimento!==addMiso(v.dataInvestimento,v.prazoMeses)?v.vencimento:''}"></div>
+  <div class="f" id="boxPend" style="display:none"><label class="chk"><input type="checkbox" name="pendente" ${v.pendente?'checked':''}> Já venceu e ainda não recebi</label></div>
   <div class="prev" id="prev"></div><div class="err" id="ferr"></div>
   <div class="toolbar"><button class="btn" type="submit" id="btnSalvar" style="flex:1">Salvar</button><button class="btn sec" type="button" onclick="dlg.close()">Cancelar</button></div></form>`;
   dlg.showModal();prevForm(dlg.querySelector('form'));
@@ -515,6 +524,7 @@ function openForm(id){
 const addMiso=(s,n)=>{if(!s||!n)return'';const m=D(s);return iso(addM(m,+n,new Date(m).getUTCDate()))};
 function prevForm(f){
   const bul=f.pagamento.value==='bullet';$('boxProx').style.display=bul?'none':'';
+  {const v0=f.vencimento.value||addMiso(f.dataInvestimento.value,f.prazoMeses.value);$('boxPend').style.display=(v0&&D(v0)<TODAY)?'':'none'}
   const ve=f.vencimento.value||addMiso(f.dataInvestimento.value,f.prazoMeses.value);
   const eff=annualEff({indexador:f.indexador.value,taxa:+f.taxa.value||0},P());
   $('prev').innerHTML=`📅 Vencimento: <b>${ve?brDate(D(ve)):'—'}</b><br>📈 Rentabilidade bruta estimada: <b>${PCT(eff*100)} a.a.</b> <span class="note">(CDI ${PCT(P().cdi)}, IPCA ${PCT(P().ipca)})</span>${f.ir.value==='regressivo'?'<br>🧾 I.R. regressivo calculado e abatido automaticamente.':'<br>🧾 Isento de I.R.'}`;
@@ -522,7 +532,7 @@ function prevForm(f){
 async function saveForm(e,id){
   e.preventDefault();const f=e.target,b=$('btnSalvar'),er=$('ferr');
   const d={id:id||undefined};['nome','pagamento','risco','indexador','ir','dataInvestimento','proximaParcela','vencimento'].forEach(k=>d[k]=f[k].value);
-  ['prazoMeses','taxa','valor'].forEach(k=>d[k]=f[k].value);
+  ['prazoMeses','taxa','valor'].forEach(k=>d[k]=f[k].value);d.pendente=f.pendente.checked;
   if(!d.nome.trim())return er.textContent='Dê um nome ao investimento.',false;
   if(!d.taxa||!d.prazoMeses||!d.valor)return er.textContent='Preencha taxa, prazo e valor investido.',false;
   if(d.pagamento!=='bullet'&&!d.proximaParcela)return er.textContent='Informe a data da próxima parcela.',false;
@@ -586,7 +596,7 @@ function normRow(r,idx){
     risco:((String(r.risco||'').toUpperCase().match(/\b[A-E]\b/)||[''])[0]),
     indexador:idxr.includes('cdi')?'cdi':idxr.includes('ipca')?'ipca':(idxr.includes('pre')||idxr.includes('pré')||idxr.includes('fix'))?'pre':'',
     taxa:numB(r.taxa),valor:numB(r.valor),prazoMeses:numB(r.prazoMeses),
-    ir:lc(r.ir).includes('isent')?'isento':'regressivo',
+    ir:lc(r.ir).includes('isent')?'isento':'regressivo',pendente:r.pendente===true||['true','sim'].includes(lc(r.pendente)),
     dataInvestimento:dateB(r.dataInvestimento),vencimento:dateB(r.vencimento),proximaParcela:dateB(r.proximaParcela)};
   if(!d.prazoMeses&&d.dataInvestimento&&d.vencimento)d.prazoMeses=Math.max(1,Math.round(days(D(d.dataInvestimento),D(d.vencimento))/30.4375));
   if(d.prazoMeses)d.prazoMeses=Math.round(d.prazoMeses);
@@ -624,7 +634,9 @@ function analisarImport(){
 }
 function renderImportPrev(){
   const ok=IMP.filter(r=>r.sel),bad=IMP.filter(r=>r.err.length).length,dup=IMP.filter(r=>r.dup&&!r.err.length).length;
+  const vencPassou=d=>{const v=d.vencimento||addMiso(d.dataInvestimento,d.prazoMeses);return !!v&&D(v)<TODAY};
   const line=r=>{const d=r.d;return`<label class="imp"><input type="checkbox" ${r.sel?'checked':''} ${r.err.length?'disabled':''} onchange="IMP[${IMP.indexOf(r)}].sel=this.checked;renderImportPrev()"><div class="t"><b>${esc(d.nome)}</b><span class="note">${BRL(d.valor)} · ${PAG[d.pagamento]||'?'} · Risco ${d.risco||'?'} · ${d.indexador?(d.indexador==='pre'?'Pré ':IDX[d.indexador]+' ')+PCT(d.taxa)+' a.a.':'?'} · ${d.ir==='isento'?'isento de I.R.':'com I.R.'}<br>${d.dataInvestimento?brDate(D(d.dataInvestimento)):'?'} → ${d.vencimento?brDate(D(d.vencimento)):(d.prazoMeses||'?')+' meses'}${d.pagamento&&d.pagamento!=='bullet'&&d.proximaParcela?' · próxima '+brDate(D(d.proximaParcela)):''}</span>
+    ${(!r.err.length&&vencPassou(r.d))?`<span class="chk" style="margin-top:6px" onclick="event.preventDefault()"><input type="checkbox" ${r.d.pendente?'checked':''} onclick="event.stopPropagation()" onchange="IMP[${IMP.indexOf(r)}].d.pendente=this.checked"> Já venceu e ainda não recebi</span>`:''}
     ${r.err.length?`<span class="badge bad">Faltou: ${esc(r.err.join(', '))}</span>`:r.dup?'<span class="badge dup">Já cadastrado — desmarcado</span>':'<span class="badge ok">Pronto</span>'}</div></label>`};
   $('impPrev').innerHTML=`<h3 style="margin-top:6px">Conferência</h3><div class="note" style="margin-bottom:6px">${IMP.length} lidos · ${ok.length} selecionados${bad?` · ${bad} com problema`:''}${dup?` · ${dup} já existem`:''} · total ${BRL(sum(ok,r=>r.d.valor))}</div>
   <div class="card" style="padding:4px 14px;box-shadow:none">${IMP.map(line).join('')}</div>
