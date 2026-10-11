@@ -407,12 +407,12 @@ function viewResumo(){
   const allf=fut.concat(late),lateTot=sum(late,x=>x.liquido);
   const invested=sum(INVS,i=>i.valor),atual=sum(INVS,i=>sims[i.id].valueNow);
   const recebido=sum(past,x=>x.liquido);
-  const months=monthList(horizon),b=bucket(fut,months);
+  const maxN=Math.max(1,monthsToEnd(fut)),hz=horizon==='all'?maxN:Math.min(horizon,maxN),months=monthList(hz),b=bucket(fut,months);
   const totalLiq=sum(allf,x=>x.liquido),totalRend=sum(allf,x=>x.rend-x.ir),totalCap=sum(allf,x=>x.principal),totalIR=sum(allf,x=>x.ir);
   const lastD=fut.length?fut[fut.length-1].date:null,nd=fut.length?fut[0].date:null;
   const nextTotal=nd==null?0:sum(fut.filter(x=>x.date===nd),x=>x.liquido);
   const thisM=sum(b[months[0]]||[],x=>x.liquido),nextM=sum(b[months[1]]||[],x=>x.liquido);
-  const avg=sum(months,k=>sum(b[k],x=>x.rend-x.ir))/horizon;
+  const avg=sum(months,k=>sum(b[k],x=>x.rend-x.ir))/hz;
   const series=chartSeries(months,b);
   const byDate=[];fut.forEach(x=>{const l=byDate[byDate.length-1];if(l&&l.date===x.date){l.liq+=x.liquido;l.cap+=x.principal;l.ir+=x.ir}else byDate.push({date:x.date,liq:x.liquido,cap:x.principal,ir:x.ir})});
   const up=byDate.slice(0,7).map(x=>{const[,m,d]=iso(x.date).split('-');return`<div class="tl"><div class="dbadge"><b>${d}</b><span>${MES[+m-1]}</span></div><div class="mid"><b>${quando(x.date)}</b><span class="note">${x.cap>.01?'inclui capital de '+BRL(x.cap):'rendimento'}${x.ir>0?' · I.R. '+BRL(x.ir)+' descontado':''}</span></div><div class="num pos"><b>${BRL(x.liq)}</b></div></div>`}).join('');
@@ -430,11 +430,11 @@ function viewResumo(){
   <div class="grid k4 stagger">
     <div class="card kpi hover" style="--i:0"><div class="ic">${ico('trend')}</div><div class="l">Patrimônio atual (bruto)</div><div class="v">${cnt(atual)}</div><div class="s">${BRL(invested)} investidos</div></div>
     <div class="card kpi hover" style="--i:1"><div class="ic">${ico('cash')}</div><div class="l">Já recebido (líquido)</div><div class="v">${cnt(recebido)}</div><div class="s">estimado desde o início</div></div>
-    <div class="card kpi hover" style="--i:2"><div class="ic">${ico('cal')}</div><div class="l">Renda média por mês</div><div class="v pos">${cnt(avg)}</div><div class="s">próximos ${horizon} meses, líquida</div></div>
+    <div class="card kpi hover" style="--i:2"><div class="ic">${ico('cal')}</div><div class="l">Renda média por mês</div><div class="v pos">${cnt(avg)}</div><div class="s">${horizon==='all'?'até o fim':'próximos '+hz+' meses'}, líquida</div></div>
     <div class="card kpi hover bad" style="--i:3"><div class="ic">${ico('tax')}</div><div class="l">I.R. a ser retido</div><div class="v neg">${cnt(totalIR)}</div><div class="s">até o último vencimento</div></div>
   </div>
   <div><h2 class="sec">${ico('chart')}Quanto vou receber por mês</h2>
-  <div class="card"><div class="toolbar" style="margin-bottom:12px"><div class="seg">${[6,12,24,36,60].map(h=>`<button class="${h===horizon?'on':''}" onclick="horizon=${h};render(false)">${h}m</button>`).join('')}</div><span class="sp"></span>${capToggle()}</div>
+  <div class="card"><div class="toolbar" style="margin-bottom:12px"><div class="seg">${[[6,'6 meses'],[12,'1 ano'],[24,'2 anos'],[36,'3 anos'],['all','Todo período']].map(([h,l])=>`<button class="${h===horizon?'on':''}" onclick="horizon=${typeof h==='number'?h:"'all'"};render(false)">${l}</button>`).join('')}</div><span class="sp"></span>${capToggle()}</div>
     ${stackedBars('c1',months,series)}${legend(series)}
     <p class="note" style="margin:12px 0 0">Valores líquidos, já com I.R. descontado. Toque numa barra para ver o mês.</p></div></div>
   <div class="grid two" style="align-items:start">
