@@ -145,6 +145,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--brand);flex:none}
 .col{cursor:pointer}.col rect.hit{fill:transparent}.col:hover rect.hit{fill:var(--brand);opacity:.07}
 .col .bar{transform-box:fill-box;transform-origin:bottom;animation:grow .7s var(--ease) both;animation-delay:calc(var(--i)*28ms)}
 svg text{fill:var(--mute);font-size:11px;font-family:inherit}
+svg text.dl{fill:var(--ink);font-size:10.5px;font-weight:600;pointer-events:none}
 .tip{position:fixed;z-index:60;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:12px;padding:9px 12px;font-size:12.5px;box-shadow:0 10px 30px rgba(0,0,0,.3);opacity:0;transform:translateY(4px);transition:.15s;max-width:260px}
 .tip.on{opacity:1;transform:none}.tip b{display:block;margin-bottom:3px}.tip div{display:flex;justify-content:space-between;gap:14px}
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--mute);margin-top:10px}
@@ -354,15 +355,17 @@ const monthsToEnd=fut=>{if(!fut.length)return 12;const[ly,lm]=monthKey(fut[fut.l
 
 /* ============ gráficos ============ */
 const CHARTS={};
+const shortV=v=>v>=10000?Math.round(v/1000)+'k':v>=1000?(v/1000).toFixed(1).replace('.',',').replace(',0','')+'k':String(Math.round(v));
 let capMode=false;
 const serieRenda=(months,b)=>({label:'Renda',color:'#14a05a',values:months.map(k=>sum(b[k],x=>x.rend-x.ir))});
 const serieCap=(months,b)=>({label:'Capital',color:'#7db4f5',values:months.map(k=>sum(b[k],x=>x.principal))});
 const chartSeries=(months,b)=>capMode?[serieRenda(months,b),serieCap(months,b)]:[serieRenda(months,b)];
 function stackedBars(id,labels,series,height=240){
   CHARTS[id]={labels,series};
-  const n=labels.length,pl=44,pr=6,pt=12,pb=26,H=height,ih=H-pb-pt;
+  const n=labels.length,pl=44,pr=6,pb=26,H=height;
   const avail=Math.max(260,($('app').clientWidth||360)-72);
   const W=Math.max(avail,pl+pr+n*(innerWidth<700?20:18)),iw=W-pl-pr,bw=iw/n;
+  const rot=bw<34,pt=rot?40:22,ih=H-pb-pt;
   const max=Math.max(1,...labels.map((_,i)=>series.reduce((s,x)=>s+x.values[i],0)))*1.1;
   const step=(()=>{const raw=max/4,p=Math.pow(10,Math.floor(Math.log10(raw)));return[1,2,5,10].map(x=>x*p).find(x=>x>=raw)})();
   const every=Math.max(1,Math.ceil(46/bw));
@@ -373,7 +376,9 @@ function stackedBars(id,labels,series,height=240){
     const vis=series.filter(s=>s.values[i]>0);
     vis.forEach((s,si)=>{const h=Math.max(0,(s.values[i]/max)*ih);y-=h;const top=si===vis.length-1;
       bars+=`<rect class="bar" x="${x}" y="${y}" width="${w}" height="${h}" rx="${top?Math.min(6,w/2):1}" fill="${s.color}"/>`});
-    g+=`<g class="col" style="--i:${i}" onmousemove="tip(event,'${id}',${i})" onmouseleave="tipOff()" onclick="tip(event,'${id}',${i})"><rect class="hit" x="${pl+i*bw}" y="${pt}" width="${bw}" height="${ih}" rx="8"/>${bars}</g>`;
+    const tot=series.reduce((a,x)=>a+x.values[i],0);
+    const lab=tot>0.5?(rot?`<text class="dl" transform="translate(${x+w/2+4} ${y-5}) rotate(-90)" text-anchor="start">${shortV(tot)}</text>`:`<text class="dl" x="${x+w/2}" y="${y-5}" text-anchor="middle">${shortV(tot)}</text>`):'';
+    g+=`<g class="col" style="--i:${i}" onmousemove="tip(event,'${id}',${i})" onmouseleave="tipOff()" onclick="tip(event,'${id}',${i})"><rect class="hit" x="${pl+i*bw}" y="${pt}" width="${bw}" height="${ih}" rx="8"/>${bars}${lab}</g>`;
     if(i%every===0)g+=`<text x="${x+w/2}" y="${H-7}" text-anchor="middle">${monthLabel(lb)}</text>`;
   });
   return `<div class="chartwrap"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img">${g}</svg></div>`;
@@ -434,7 +439,7 @@ function viewResumo(){
     <div class="card kpi hover bad" style="--i:3"><div class="ic">${ico('tax')}</div><div class="l">I.R. a ser retido</div><div class="v neg">${cnt(totalIR)}</div><div class="s">até o último vencimento</div></div>
   </div>
   <div><h2 class="sec">${ico('chart')}Quanto vou receber por mês</h2>
-  <div class="card"><div class="toolbar" style="margin-bottom:12px"><div class="seg">${[[6,'6 meses'],[12,'1 ano'],[24,'2 anos'],[36,'3 anos'],['all','Todo período']].map(([h,l])=>`<button class="${h===horizon?'on':''}" onclick="horizon=${typeof h==='number'?h:"'all'"};render(false)">${l}</button>`).join('')}</div><span class="sp"></span>${capToggle()}</div>
+  <div class="card"><div class="toolbar" style="margin-bottom:12px"><div class="seg">${[[6,'6m'],[12,'1 ano'],[24,'2 anos'],[36,'3 anos'],['all','Tudo']].map(([h,l])=>`<button class="${h===horizon?'on':''}" onclick="horizon=${typeof h==='number'?h:"'all'"};render(false)">${l}</button>`).join('')}</div><span class="sp"></span>${capToggle()}</div>
     ${stackedBars('c1',months,series)}${legend(series)}
     <p class="note" style="margin:12px 0 0">Valores líquidos, já com I.R. descontado. Toque numa barra para ver o mês.</p></div></div>
   <div class="grid two" style="align-items:start">
