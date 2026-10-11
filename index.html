@@ -165,6 +165,17 @@ details summary{cursor:pointer;font-weight:600;list-style:none}details summary::
 details summary::before{content:"▸";display:inline-block;margin-right:6px;color:var(--mute);transition:transform .2s}details[open] summary::before{transform:rotate(90deg)}
 /* formulário */
 label.l{display:block;font-size:12.5px;color:var(--mute);font-weight:600;margin-bottom:5px}.f{margin-bottom:14px}
+textarea{font:13px/1.45 ui-monospace,Consolas,monospace;color:var(--ink);background:var(--card2);border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;width:100%;resize:vertical;outline:0;transition:.2s}
+textarea:focus{border-color:var(--brand);box-shadow:0 0 0 4px color-mix(in srgb,var(--brand) 18%,transparent)}
+.steps{counter-reset:s;list-style:none;margin:0 0 14px;padding:0}
+.steps>li{counter-increment:s;position:relative;padding:0 0 16px 40px}
+.steps>li::before{content:counter(s);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;font-weight:700;font-size:13px}
+.promptbox{max-height:200px;overflow:auto;white-space:pre-wrap;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px;font:12px/1.5 ui-monospace,Consolas,monospace;margin-top:8px}
+.imp{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--line)}.imp:last-child{border:0}
+.imp input{width:18px;height:18px;margin-top:3px;accent-color:var(--brand);flex:none}
+.imp .t{flex:1;min-width:0}.imp .t b{display:block;overflow-wrap:anywhere}
+.badge{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:99px;margin-top:4px}
+.badge.ok{background:var(--brand-soft);color:var(--brand)}.badge.bad{background:var(--bad-soft);color:var(--bad)}.badge.dup{background:#fff2d1;color:#9a6a00}
 input[type=text],input[type=email],input[type=password],input[type=number],input[type=date],select{font:inherit;color:var(--ink);background:var(--card2);border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;width:100%;transition:.2s;outline:0}
 input:focus,select:focus{border-color:var(--brand);box-shadow:0 0 0 4px color-mix(in srgb,var(--brand) 18%,transparent)}
 .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.fgrid .full{grid-column:1/-1}
@@ -368,7 +379,7 @@ function donut(items,total){
 
 /* ============ telas ============ */
 const greet=()=>{const h=new Date().getHours();return h<5?'Boa madrugada':h<12?'Bom dia':h<18?'Boa tarde':'Boa noite'};
-function emptyState(){return`<div class="card empty view">${ico('wallet','big')}<h3>Nenhum investimento ainda</h3><p class="note" style="max-width:340px;margin:0 auto 18px">Cadastre o primeiro e veja quanto você vai receber mês a mês, já com o I.R. descontado.</p><button class="btn" onclick="openForm()">${ico('plus')}Cadastrar investimento</button></div>`}
+function emptyState(){return`<div class="card empty view">${ico('wallet','big')}<h3>Nenhum investimento ainda</h3><p class="note" style="max-width:340px;margin:0 auto 18px">Cadastre o primeiro e veja quanto você vai receber mês a mês, já com o I.R. descontado.</p><div class="toolbar" style="justify-content:center"><button class="btn" onclick="openForm()">${ico('plus')}Cadastrar um</button><button class="btn sec" onclick="openImport()">${ico('wallet')}Importar vários com IA</button></div></div>`}
 function viewResumo(){
   if(!INVS.length)return emptyState();
   const{fut,past,sims}=portfolio();
@@ -432,7 +443,7 @@ function viewInv(){
     <div style="margin:10px 0 4px"><span class="chip">${PAG[inv.pagamento]}</span><span class="chip r-${inv.risco}">Risco ${inv.risco}</span><span class="chip">${rentText(inv)}</span><span class="chip">${inv.ir==='isento'?'Isento de I.R.':'Com I.R.'}</span><span class="chip">${inv.prazoMeses} meses</span></div>
     <div class="row"><span class="m">Próxima parcela</span><span>${nx?brDate(nx.date)+' · <b>'+BRL(nx.liquido)+'</b>':'—'}</span></div><div class="row"><span class="m">Vencimento</span><span>${brDate(ve)}</span></div>
     <div class="prog"><i style="width:${prog}%"></i></div><div class="note" style="margin-top:5px">${prog.toFixed(0)}% do prazo decorrido</div></div>`}).join('');
-  return`<div class="view"><div class="grid two-eq stagger">${cards}</div></div>`;
+  return`<div class="view"><div class="toolbar"><span class="note">${INVS.length} investimentos</span><span class="sp"></span><button class="btn sec" onclick="openImport()">${ico('wallet')}Importar em massa</button></div><div class="grid two-eq stagger">${cards}</div></div>`;
 }
 function viewCfg(){
   const t=TAXAS;
@@ -509,6 +520,109 @@ async function delInv(id){
 async function atualizarTaxas(){const b=$('btnTaxas');b.disabled=true;b.textContent='Buscando…';try{TAXAS=(await api('apiTaxas',token,true)).taxas;render(false);toast('Taxas atualizadas')}catch(x){erro(x)}}
 function erro(x,el){if(x.message==='SESSAO_EXPIRADA'){logout(true);return}if(el)el.textContent=x.message;else toast(x.message,true)}
 document.getElementById('dlg').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.close()});
+
+/* ============ importação em massa ============ */
+const PROMPT_IMPORT=`Você é um extrator de dados. Vou enviar capturas de tela do app da plataforma Inco, uma por investimento (tela que contém "Detalhe do investimento"). Para CADA captura, gere um objeto JSON com os campos abaixo. Devolva todos os objetos dentro de UM único array JSON.
+
+CAMPOS (use exatamente estes nomes):
+- "nome": "<Empresa> - <Nome da emissão>", como aparece no topo da tela (ex.: "CK Construções - CRI CK Habitah e Artefacto"). Se o texto estiver cortado com "…", escreva o que aparece.
+- "pagamento": "juros" se o campo Pagamento for "Juros mensais"; "bullet" se for "Bullet"; "amort" se o capital for devolvido em parcelas ao longo do prazo.
+- "risco": somente a letra (A, B, C, D ou E) do campo Risco.
+- "prazoMeses": número inteiro do campo Prazo (ex.: "26 meses" -> 26).
+- "indexador": "cdi" se a Rentabilidade começar com "CDI +"; "ipca" se começar com "IPCA +"; "pre" se for taxa prefixada.
+- "taxa": somente o número da taxa ao ano, com ponto decimal (ex.: "IPCA + 12.5% a.a." -> 12.5).
+- "ir": "isento" se o campo I.R. mostrar "Isento"; caso contrário "regressivo".
+- "valor": número do campo "Valor investido" (NÃO use "Valor ativo bruto"), sem R$ e sem separador de milhar, com ponto decimal (ex.: "R$ 12.000,00" -> 12000).
+- "dataInvestimento": "Data do investimento" no formato AAAA-MM-DD.
+- "vencimento": "Vencimento" no formato AAAA-MM-DD.
+- "proximaParcela": "Próxima parcela" no formato AAAA-MM-DD. Se o pagamento for "bullet", repita a data do vencimento.
+
+REGRAS:
+- As datas na tela estão em DD/MM/AAAA; converta para AAAA-MM-DD.
+- Não invente nada. Se algum campo não estiver legível, use null.
+- Gere um objeto por captura, mesmo que o nome se repita (são aportes diferentes).
+- Responda SOMENTE com o JSON, sem explicações antes ou depois.
+
+EXEMPLO DE RESPOSTA:
+[
+ {"nome":"CK Construções - CRI CK Habitah e Artefacto","pagamento":"juros","risco":"B","prazoMeses":26,"indexador":"ipca","taxa":12.5,"ir":"isento","valor":2000,"dataInvestimento":"2026-10-06","vencimento":"2028-12-21","proximaParcela":"2026-11-21"},
+ {"nome":"Construtora Pride - Recebíveis Pride 2 - Bullet - 12 meses","pagamento":"bullet","risco":"C","prazoMeses":12,"indexador":"cdi","taxa":7,"ir":"regressivo","valor":1500,"dataInvestimento":"2026-04-23","vencimento":"2027-04-07","proximaParcela":"2027-04-07"}
+]`;
+let IMP=[];
+const numB=v=>{if(v==null||v==='')return null;if(typeof v==='number')return isFinite(v)?v:null;let t=String(v).replace(/[R$\s%]/g,'');if(t.includes(','))t=t.replace(/\./g,'').replace(',','.');const n=parseFloat(t);return isFinite(n)?n:null};
+const dateB=v=>{if(!v)return'';const t=String(v).trim();let m=t.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[0];m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);return m?`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`:''};
+function parseImport(txt){
+  let t=String(txt||'').replace(/[“”]/g,'"').trim();
+  const f=t.match(/```(?:json)?\s*([\s\S]*?)```/i);if(f)t=f[1].trim();
+  const a=t.search(/[\[{]/);if(a<0)throw new Error('Não encontrei nenhum JSON na resposta. Cole a resposta completa da IA.');
+  t=t.slice(a);t=t.slice(0,Math.max(t.lastIndexOf(']'),t.lastIndexOf('}'))+1);
+  let j;try{j=JSON.parse(t)}catch(e){throw new Error('O JSON está com erro de formato. Peça à IA: "corrija e devolva só o JSON válido".')}
+  if(!Array.isArray(j))j=j.investimentos||j.itens||j.items||[j];
+  if(!j.length)throw new Error('A lista veio vazia.');
+  return j;
+}
+function normRow(r,idx){
+  const err=[],lc=x=>String(x??'').toLowerCase();
+  const pg=lc(r.pagamento),idxr=lc(r.indexador);
+  const d={nome:String(r.nome||'').trim()||('Investimento '+(idx+1)),
+    pagamento:pg.includes('bullet')?'bullet':pg.includes('amort')?'amort':pg.includes('juros')?'juros':'',
+    risco:((String(r.risco||'').toUpperCase().match(/\b[A-E]\b/)||[''])[0]),
+    indexador:idxr.includes('cdi')?'cdi':idxr.includes('ipca')?'ipca':(idxr.includes('pre')||idxr.includes('pré')||idxr.includes('fix'))?'pre':'',
+    taxa:numB(r.taxa),valor:numB(r.valor),prazoMeses:numB(r.prazoMeses),
+    ir:lc(r.ir).includes('isent')?'isento':'regressivo',
+    dataInvestimento:dateB(r.dataInvestimento),vencimento:dateB(r.vencimento),proximaParcela:dateB(r.proximaParcela)};
+  if(!d.prazoMeses&&d.dataInvestimento&&d.vencimento)d.prazoMeses=Math.max(1,Math.round(days(D(d.dataInvestimento),D(d.vencimento))/30.4375));
+  if(d.prazoMeses)d.prazoMeses=Math.round(d.prazoMeses);
+  if(!d.pagamento)err.push('tipo de pagamento');if(!d.risco)err.push('risco');if(!d.indexador)err.push('rentabilidade (CDI/IPCA/pré)');
+  if(d.taxa==null)err.push('taxa');if(!(d.valor>0))err.push('valor investido');if(!d.dataInvestimento)err.push('data do investimento');
+  if(!d.prazoMeses)err.push('prazo');
+  if(d.pagamento==='bullet'&&d.vencimento)d.proximaParcela=d.vencimento;
+  if(d.pagamento&&d.pagamento!=='bullet'&&!d.proximaParcela)err.push('próxima parcela');
+  const dup=INVS.some(i=>i.nome.trim().toLowerCase()===d.nome.toLowerCase()&&+i.valor===+d.valor&&i.dataInvestimento===d.dataInvestimento);
+  return{d,err,dup,sel:!err.length&&!dup};
+}
+function openImport(){
+  dlg.innerHTML=`<div class="dlg"><div class="head"><h3>Importar em massa com IA</h3><button class="x" onclick="dlg.close()">${ico('x')}</button></div>
+  <ol class="steps">
+   <li><b>Copie o prompt</b><div class="note">Ele ensina a IA a ler os prints da Inco e devolver tudo no formato do app.</div>
+     <div class="toolbar" style="margin-top:8px"><button class="btn" onclick="copyPrompt()">Copiar prompt</button></div>
+     <details style="margin-top:8px"><summary class="note">Ver o prompt</summary><div class="promptbox">${esc(PROMPT_IMPORT)}</div></details></li>
+   <li><b>Abra uma IA que leia imagens</b> (ChatGPT, Claude, Gemini…), cole o prompt e anexe os prints da tela <i>Detalhe do investimento</i> — pode mandar vários de uma vez, um print por investimento.</li>
+   <li><b>Cole aqui a resposta da IA</b>
+     <textarea id="impTxt" rows="7" placeholder='[ {"nome":"…","pagamento":"juros", …} ]' style="margin-top:8px"></textarea>
+     <div class="err" id="impErr"></div>
+     <button class="btn sec" onclick="analisarImport()">Analisar</button></li>
+  </ol><div id="impPrev"></div></div>`;
+  dlg.showModal();
+}
+async function copyPrompt(){
+  try{await navigator.clipboard.writeText(PROMPT_IMPORT)}
+  catch(e){const t=document.createElement('textarea');t.value=PROMPT_IMPORT;document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(_){}t.remove()}
+  toast('Prompt copiado ✔');
+}
+function analisarImport(){
+  const er=$('impErr');er.textContent='';$('impPrev').innerHTML='';
+  try{IMP=parseImport($('impTxt').value).map(normRow)}catch(x){er.textContent=x.message;return}
+  renderImportPrev();
+}
+function renderImportPrev(){
+  const ok=IMP.filter(r=>r.sel),bad=IMP.filter(r=>r.err.length).length,dup=IMP.filter(r=>r.dup&&!r.err.length).length;
+  const line=r=>{const d=r.d;return`<label class="imp"><input type="checkbox" ${r.sel?'checked':''} ${r.err.length?'disabled':''} onchange="IMP[${IMP.indexOf(r)}].sel=this.checked;renderImportPrev()"><div class="t"><b>${esc(d.nome)}</b><span class="note">${BRL(d.valor)} · ${PAG[d.pagamento]||'?'} · Risco ${d.risco||'?'} · ${d.indexador?(d.indexador==='pre'?'Pré ':IDX[d.indexador]+' ')+PCT(d.taxa)+' a.a.':'?'} · ${d.ir==='isento'?'isento de I.R.':'com I.R.'}<br>${d.dataInvestimento?brDate(D(d.dataInvestimento)):'?'} → ${d.vencimento?brDate(D(d.vencimento)):(d.prazoMeses||'?')+' meses'}${d.pagamento&&d.pagamento!=='bullet'&&d.proximaParcela?' · próxima '+brDate(D(d.proximaParcela)):''}</span>
+    ${r.err.length?`<span class="badge bad">Faltou: ${esc(r.err.join(', '))}</span>`:r.dup?'<span class="badge dup">Já cadastrado — desmarcado</span>':'<span class="badge ok">Pronto</span>'}</div></label>`};
+  $('impPrev').innerHTML=`<h3 style="margin-top:6px">Conferência</h3><div class="note" style="margin-bottom:6px">${IMP.length} lidos · ${ok.length} selecionados${bad?` · ${bad} com problema`:''}${dup?` · ${dup} já existem`:''} · total ${BRL(sum(ok,r=>r.d.valor))}</div>
+  <div class="card" style="padding:4px 14px;box-shadow:none">${IMP.map(line).join('')}</div>
+  ${bad?'<p class="note">Itens com problema não são importados. Corrija o JSON no campo acima (ou peça à IA para refazer) e clique em Analisar de novo.</p>':''}
+  <div class="toolbar" style="margin-top:12px"><button class="btn" id="btnImp" style="flex:1" ${ok.length?'':'disabled'} onclick="confirmarImport()">Importar ${ok.length} investimento${ok.length===1?'':'s'}</button></div>`;
+}
+async function confirmarImport(){
+  const b=$('btnImp'),lista=IMP.filter(r=>r.sel).map(r=>r.d);if(!lista.length)return;
+  b.disabled=true;b.textContent='Importando…';
+  try{
+    const r=await api('apiSalvarLote',token,lista);
+    await carregar();dlg.close();tab='inv';render(true);
+    toast(r.erros&&r.erros.length?`${r.criados} importados · ${r.erros.length} ignorados`:`${r.criados} investimentos importados ✔`,!!(r.erros&&r.erros.length&&!r.criados));
+  }catch(x){b.disabled=false;b.textContent='Tentar de novo';erro(x)}
+}
 
 /* ============ login / sessão ============ */
 function telaAuth(modo='login'){
