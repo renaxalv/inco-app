@@ -104,11 +104,14 @@ h3{font-size:14px;margin:0 0 12px;font-weight:700}
 .hero .hi{opacity:.75;font-size:13.5px}
 .hero .big{font-size:clamp(30px,6vw,44px);font-weight:800;letter-spacing:-.03em;margin:2px 0 4px;font-variant-numeric:tabular-nums}
 .hero .delta{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.14);border-radius:99px;padding:3px 11px;font-size:12.5px;font-weight:600}
-.hero .mini{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:20px;position:relative;z-index:1}
+.hero .mini{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:18px;position:relative;z-index:1}
+.hero2{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;margin-top:16px;position:relative;z-index:1}
+.hero .lab{opacity:.75;font-size:13px}.hero .big2{font-size:clamp(24px,4.5vw,34px);font-weight:800;letter-spacing:-.03em;margin:2px 0 4px;font-variant-numeric:tabular-nums}
+.hero .sub{opacity:.78;font-size:12.5px;line-height:1.5}
+@media(min-width:760px){.hero2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:30px}.hero2>div+div{border-left:1px solid rgba(255,255,255,.18);padding-left:30px}}
 .hero .mini div{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:11px 12px;backdrop-filter:blur(6px)}
 .hero .mini small{display:block;opacity:.72;font-size:11.5px;margin-bottom:2px}.hero .mini b{font-size:15.5px;font-variant-numeric:tabular-nums;display:block}
 .hero .mini i{font-style:normal;font-size:11px;opacity:.65}
-@media(max-width:520px){.hero .mini{grid-template-columns:1fr 1fr}.hero .mini div:last-child{grid-column:1/-1}}
 .kpi{display:flex;flex-direction:column;gap:2px;padding:15px}
 .kpi .ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);margin-bottom:8px}
 .kpi.bad .ic{background:var(--bad-soft);color:var(--bad)}
@@ -134,8 +137,7 @@ h3{font-size:14px;margin:0 0 12px;font-weight:700}
 .tl .mid{flex:1;min-width:0}.tl .mid b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
 /* gráfico */
 .chartwrap{position:relative;overflow-x:auto;margin:0 -6px;padding:0 6px}
-.chartwrap svg{display:block;width:100%;height:auto;overflow:visible}
-@media(max-width:700px){.chartwrap svg{min-width:calc(var(--n,12)*34px)}}
+.chartwrap svg{display:block;max-width:none;overflow:visible}
 .col{cursor:pointer}.col rect.hit{fill:transparent}.col:hover rect.hit{fill:var(--brand);opacity:.07}
 .col .bar{transform-box:fill-box;transform-origin:bottom;animation:grow .7s var(--ease) both;animation-delay:calc(var(--i)*28ms)}
 svg text{fill:var(--mute);font-size:11px;font-family:inherit}
@@ -346,33 +348,42 @@ const monthsToEnd=fut=>{if(!fut.length)return 12;const[ly,lm]=monthKey(fut[fut.l
 
 /* ============ gráficos ============ */
 const CHARTS={};
-function stackedBars(id,labels,series,height=250){
+let capMode=false;
+const serieRenda=(months,b)=>({label:'Renda',color:'#14a05a',values:months.map(k=>sum(b[k],x=>x.rend-x.ir))});
+const serieCap=(months,b)=>({label:'Capital',color:'#7db4f5',values:months.map(k=>sum(b[k],x=>x.principal))});
+const chartSeries=(months,b)=>capMode?[serieRenda(months,b),serieCap(months,b)]:[serieRenda(months,b)];
+function stackedBars(id,labels,series,height=240){
   CHARTS[id]={labels,series};
-  const W=720,H=height,pl=46,pb=26,pt=12,pr=6,iw=W-pl-pr,ih=H-pb-pt;
+  const n=labels.length,pl=44,pr=6,pt=12,pb=26,H=height,ih=H-pb-pt;
+  const avail=Math.max(260,($('app').clientWidth||360)-72);
+  const W=Math.max(avail,pl+pr+n*(innerWidth<700?20:18)),iw=W-pl-pr,bw=iw/n;
   const max=Math.max(1,...labels.map((_,i)=>series.reduce((s,x)=>s+x.values[i],0)))*1.1;
   const step=(()=>{const raw=max/4,p=Math.pow(10,Math.floor(Math.log10(raw)));return[1,2,5,10].map(x=>x*p).find(x=>x>=raw)})();
+  const every=Math.max(1,Math.ceil(46/bw));
   let g='';
   for(let v=0;v<=max;v+=step){const y=pt+ih-(v/max)*ih;g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="${v?'3 4':'0'}"/><text x="${pl-8}" y="${y+4}" text-anchor="end">${v>=1000?(v/1000).toLocaleString('pt-BR')+'k':v}</text>`}
-  const bw=iw/labels.length;
   labels.forEach((lb,i)=>{
     const x=pl+i*bw+bw*.16,w=bw*.68;let y=pt+ih,bars='';
     const vis=series.filter(s=>s.values[i]>0);
     vis.forEach((s,si)=>{const h=Math.max(0,(s.values[i]/max)*ih);y-=h;const top=si===vis.length-1;
       bars+=`<rect class="bar" x="${x}" y="${y}" width="${w}" height="${h}" rx="${top?Math.min(6,w/2):1}" fill="${s.color}"/>`});
     g+=`<g class="col" style="--i:${i}" onmousemove="tip(event,'${id}',${i})" onmouseleave="tipOff()" onclick="tip(event,'${id}',${i})"><rect class="hit" x="${pl+i*bw}" y="${pt}" width="${bw}" height="${ih}" rx="8"/>${bars}</g>`;
-    if(labels.length<=24||i%2===0)g+=`<text x="${x+w/2}" y="${H-7}" text-anchor="middle">${monthLabel(lb)}</text>`;
+    if(i%every===0)g+=`<text x="${x+w/2}" y="${H-7}" text-anchor="middle">${monthLabel(lb)}</text>`;
   });
-  return `<div class="chartwrap" style="--n:${labels.length}"><svg viewBox="0 0 ${W} ${H}" role="img">${g}</svg></div>`;
+  return `<div class="chartwrap"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img">${g}</svg></div>`;
 }
 function tip(e,id,i){
   const c=CHARTS[id];if(!c)return;const rows=c.series.filter(s=>s.values[i]>0.004);const tot=rows.reduce((s,x)=>s+x.values[i],0);
-  const t=$('tip');t.innerHTML=`<b>${monthLabel(c.labels[i])}</b>${rows.map(s=>`<div><span><i class="dot" style="background:${s.color}"></i>${esc(s.short||s.label)}</span><span>${BRL(s.values[i])}</span></div>`).join('')||'<span style="opacity:.7">Sem recebimentos</span>'}${rows.length>1?`<div style="border-top:1px solid rgba(255,255,255,.25);margin-top:5px;padding-top:5px"><b style="margin:0">Total</b><b style="margin:0">${BRL(tot)}</b></div>`:''}`;
+  const t=$('tip');t.innerHTML=`<b>${monthLabel(c.labels[i])}</b>${rows.map(s=>`<div><span><i class="dot" style="background:${s.color}"></i>${esc(s.label)}</span><span>${BRL(s.values[i])}</span></div>`).join('')||'<span style="opacity:.7">Sem recebimentos</span>'}${rows.length>1?`<div style="border-top:1px solid rgba(255,255,255,.25);margin-top:5px;padding-top:5px"><b style="margin:0">Total</b><b style="margin:0">${BRL(tot)}</b></div>`:''}`;
   t.classList.add('on');const w=t.offsetWidth,h=t.offsetHeight;let x=e.clientX+14,y=e.clientY-h-12;
   if(x+w>innerWidth-8)x=e.clientX-w-14;if(y<8)y=e.clientY+18;t.style.left=Math.max(8,x)+'px';t.style.top=y+'px';
 }
 const tipOff=()=>$('tip').classList.remove('on');
 document.addEventListener('scroll',tipOff,true);document.addEventListener('click',e=>{if(!e.target.closest('.col'))tipOff()});
-const legend=s=>`<div class="legend">${s.map(x=>`<span><i class="dot" style="background:${x.color}"></i>${esc(x.short||x.label)}</span>`).join('')}</div>`;
+const legend=s=>s.length<2?'':`<div class="legend">${s.map(x=>`<span><i class="dot" style="background:${x.color}"></i>${esc(x.label)}</span>`).join('')}</div>`;
+const capToggle=()=>`<div class="seg"><button class="${capMode?'':'on'}" onclick="capMode=false;render(false)">Só renda</button><button class="${capMode?'on':''}" onclick="capMode=true;render(false)">Renda + capital</button></div>`;
+let lastW=innerWidth,rzT;
+addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(()=>{if(innerWidth!==lastW){lastW=innerWidth;if(token&&user&&(tab==='resumo'||tab==='proj')&&$('shell').classList.contains('on'))render(false)}},200)});
 function donut(items,total){
   const R=60,C=2*Math.PI*R;let off=0;
   const segs=items.map((it,i)=>{const len=it.v/total*C;const s=`<circle cx="75" cy="75" r="${R}" stroke="${it.c}" stroke-dasharray="${Math.max(0,len-2)} ${C}" stroke-dashoffset="${-off}" style="animation-delay:${i*120}ms"/>`;off+=len;return s}).join('');
@@ -383,60 +394,63 @@ function donut(items,total){
 /* ============ telas ============ */
 const greet=()=>{const h=new Date().getHours();return h<5?'Boa madrugada':h<12?'Bom dia':h<18?'Boa tarde':'Boa noite'};
 function emptyState(){return`<div class="card empty view">${ico('wallet','big')}<h3>Nenhum investimento ainda</h3><p class="note" style="max-width:340px;margin:0 auto 18px">Cadastre o primeiro e veja quanto você vai receber mês a mês, já com o I.R. descontado.</p><div class="toolbar" style="justify-content:center"><button class="btn" onclick="openForm()">${ico('plus')}Cadastrar um</button><button class="btn sec" onclick="openImport()">${ico('wallet')}Importar vários com IA</button></div></div>`}
+const quando=d=>{const n=days(TODAY,d);return n<=0?'hoje':n===1?'amanhã':`em ${n} dias`};
 function viewResumo(){
   if(!INVS.length)return emptyState();
   const{fut,past,sims}=portfolio();
   const invested=sum(INVS,i=>i.valor),atual=sum(INVS,i=>sims[i.id].valueNow);
-  const recebido=sum(past,x=>x.liquido),irPago=sum(past,x=>x.ir);
+  const recebido=sum(past,x=>x.liquido);
   const months=monthList(horizon),b=bucket(fut,months);
-  const total=sum(months,k=>sum(b[k],x=>x.liquido)),totalIR=sum(fut,x=>x.ir);
-  const nx=fut[0],thisM=sum(b[months[0]]||[],x=>x.liquido),nextM=sum(b[months[1]]||[],x=>x.liquido);
-  const wRate=sum(INVS,i=>annualEff(i,P())*i.valor)/invested;
-  const series=INVS.map(inv=>({label:`${inv.nome} (${BRL(inv.valor)})`,short:inv.nome,color:inv._c,values:months.map(k=>sum(b[k].filter(x=>x.inv===inv),x=>x.liquido))}));
-  const up=fut.slice(0,7).map(x=>{const[,m,d]=iso(x.date).split('-');return`<div class="tl"><div class="dbadge"><b>${d}</b><span>${MES[+m-1]}</span></div><div class="mid"><b>${esc(x.inv.nome)}</b><span class="note">${x.principal>.01?'inclui capital · ':''}${x.ir>0?`I.R. ${BRL(x.ir)} (${PCT(x.aliq*100)}) descontado`:'isento de I.R.'}</span></div><div class="num pos"><b>${BRL(x.liquido)}</b></div></div>`}).join('');
+  const totalLiq=sum(fut,x=>x.liquido),totalRend=sum(fut,x=>x.rend-x.ir),totalCap=sum(fut,x=>x.principal),totalIR=sum(fut,x=>x.ir);
+  const lastD=fut.length?fut[fut.length-1].date:null,nd=fut.length?fut[0].date:null;
+  const nextTotal=nd==null?0:sum(fut.filter(x=>x.date===nd),x=>x.liquido);
+  const thisM=sum(b[months[0]]||[],x=>x.liquido),nextM=sum(b[months[1]]||[],x=>x.liquido);
+  const avg=sum(months,k=>sum(b[k],x=>x.rend-x.ir))/horizon;
+  const series=chartSeries(months,b);
+  const byDate=[];fut.forEach(x=>{const l=byDate[byDate.length-1];if(l&&l.date===x.date){l.liq+=x.liquido;l.cap+=x.principal;l.ir+=x.ir}else byDate.push({date:x.date,liq:x.liquido,cap:x.principal,ir:x.ir})});
+  const up=byDate.slice(0,7).map(x=>{const[,m,d]=iso(x.date).split('-');return`<div class="tl"><div class="dbadge"><b>${d}</b><span>${MES[+m-1]}</span></div><div class="mid"><b>${quando(x.date)}</b><span class="note">${x.cap>.01?'inclui capital de '+BRL(x.cap):'rendimento'}${x.ir>0?' · I.R. '+BRL(x.ir)+' descontado':''}</span></div><div class="num pos"><b>${BRL(x.liq)}</b></div></div>`}).join('');
   const groups={risco:i=>'Risco '+i.risco,pag:i=>PAG[i.pagamento],rent:i=>IDX[i.indexador].replace(' +',''),ir:i=>i.ir==='isento'?'Isento':'Com I.R.'};
   const m={};INVS.forEach(i=>{const k=groups[allocBy](i);m[k]=(m[k]||0)+i.valor});
   const items=Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([k,v],i)=>({k,v,c:COLORS[i%COLORS.length]}));
   return`<div class="view">
   <section class="hero"><div class="hi">${greet()}, ${esc((user&&user.nome||'').split(' ')[0])} 👋</div>
-    <div style="margin-top:14px;opacity:.75;font-size:13px">Patrimônio atual (bruto estimado)</div>
-    <div class="big">${cnt(atual)}</div>
-    <span class="delta">${ico('trend')}${atual>=invested?'+':''}${BRL(atual-invested)} sobre ${BRL(invested).replace(',00','')} investidos</span>
-    <div class="mini"><div><small>Este mês · ${MES[_n.getMonth()]}</small><b>${cnt(thisM)}</b><i>líquido</i></div><div><small>Mês que vem</small><b>${cnt(nextM)}</b><i>líquido</i></div><div><small>Próximo recebimento</small><b>${nx?BRL(nx.liquido):'—'}</b><i>${nx?brDate(nx.date)+' · '+esc(nx.inv.nome):''}</i></div></div></section>
+    <div class="hero2">
+      <div><div class="lab">Próximo recebimento</div><div class="big">${nd==null?'—':cnt(nextTotal)}</div>${nd==null?'':`<span class="delta">${ico('cal')}${brDate(nd)} · ${quando(nd)}</span>`}</div>
+      <div><div class="lab">Total que vou receber</div><div class="big2">${cnt(totalLiq)}</div><div class="sub">${lastD?'até '+MES[new Date(lastD).getUTCMonth()]+'/'+new Date(lastD).getUTCFullYear()+' · ':''}já sem I.R.<br>renda ${BRL(totalRend)} + capital ${BRL(totalCap)}</div></div>
+    </div>
+    <div class="mini"><div><small>Este mês · ${MES[_n.getMonth()]}</small><b>${cnt(thisM)}</b></div><div><small>Mês que vem</small><b>${cnt(nextM)}</b></div></div></section>
   <div class="grid k4 stagger">
-    <div class="card kpi hover" style="--i:0"><div class="ic">${ico('cash')}</div><div class="l">Já recebido (líquido)</div><div class="v">${cnt(recebido)}</div><div class="s">estimado desde o início</div></div>
-    <div class="card kpi hover" style="--i:1"><div class="ic">${ico('cal')}</div><div class="l">Média mensal (${horizon}m)</div><div class="v pos">${cnt(total/horizon)}</div><div class="s">líquida de I.R.</div></div>
-    <div class="card kpi hover bad" style="--i:2"><div class="ic">${ico('tax')}</div><div class="l">I.R. a ser retido</div><div class="v neg">${cnt(totalIR)}</div><div class="s">já pago: ${BRL(irPago)}</div></div>
-    <div class="card kpi hover" style="--i:3"><div class="ic">${ico('coin')}</div><div class="l">Rentab. média</div><div class="v">${cnt(wRate*100,'pct')}</div><div class="s">a.a., bruta, ponderada</div></div>
+    <div class="card kpi hover" style="--i:0"><div class="ic">${ico('trend')}</div><div class="l">Patrimônio atual (bruto)</div><div class="v">${cnt(atual)}</div><div class="s">${BRL(invested)} investidos</div></div>
+    <div class="card kpi hover" style="--i:1"><div class="ic">${ico('cash')}</div><div class="l">Já recebido (líquido)</div><div class="v">${cnt(recebido)}</div><div class="s">estimado desde o início</div></div>
+    <div class="card kpi hover" style="--i:2"><div class="ic">${ico('cal')}</div><div class="l">Renda média por mês</div><div class="v pos">${cnt(avg)}</div><div class="s">próximos ${horizon} meses, líquida</div></div>
+    <div class="card kpi hover bad" style="--i:3"><div class="ic">${ico('tax')}</div><div class="l">I.R. a ser retido</div><div class="v neg">${cnt(totalIR)}</div><div class="s">até o último vencimento</div></div>
   </div>
-  <div><h2 class="sec">${ico('chart')}Recebimentos líquidos por mês</h2>
-  <div class="card"><div class="toolbar" style="margin-bottom:10px"><div class="seg">${[6,12,24,36,60].map(h=>`<button class="${h===horizon?'on':''}" onclick="horizon=${h};render(false)">${h}m</button>`).join('')}</div><span class="sp"></span><span class="note">Toque numa barra para detalhar</span></div>
+  <div><h2 class="sec">${ico('chart')}Quanto vou receber por mês</h2>
+  <div class="card"><div class="toolbar" style="margin-bottom:12px"><div class="seg">${[6,12,24,36,60].map(h=>`<button class="${h===horizon?'on':''}" onclick="horizon=${h};render(false)">${h}m</button>`).join('')}</div><span class="sp"></span>${capToggle()}</div>
     ${stackedBars('c1',months,series)}${legend(series)}
-    <p class="note" style="margin:12px 0 0">Já com I.R. abatido · CDI ${PCT(P().cdi)} · IPCA ${PCT(P().ipca)} a.a. Barras altas = meses em que o capital volta.</p></div></div>
+    <p class="note" style="margin:12px 0 0">Valores líquidos, já com I.R. descontado. Toque numa barra para ver o mês.</p></div></div>
   <div class="grid two" style="align-items:start">
-    <div><h2 class="sec">${ico('cal')}Próximos recebimentos</h2><div class="card">${up||'<div class="empty note">Sem recebimentos futuros.</div>'}</div></div>
+    <div><h2 class="sec">${ico('cal')}Próximas datas</h2><div class="card">${up||'<div class="empty note">Sem recebimentos futuros.</div>'}</div></div>
     <div><h2 class="sec">${ico('wallet')}Onde está o dinheiro</h2><div class="card"><div class="seg" style="margin-bottom:14px">${[['risco','Risco'],['pag','Pagamento'],['rent','Rentab.'],['ir','Imposto']].map(([k,l])=>`<button class="${k===allocBy?'on':''}" onclick="allocBy='${k}';render(false)">${l}</button>`).join('')}</div>${donut(items,invested)}</div></div>
   </div></div>`;
 }
 function viewProj(){
   if(!INVS.length)return emptyState();
   const{fut}=portfolio(),n=Math.max(1,monthsToEnd(fut)),months=monthList(n),b=bucket(fut,months);
-  const sR={label:'Rendimento líquido',color:'#14a05a',values:months.map(k=>sum(b[k],x=>x.rend-x.ir))};
-  const sC={label:'Capital devolvido',color:'#2f6fdb',values:months.map(k=>sum(b[k],x=>x.principal))};
-  let acc=0;
-  const rows=months.map(k=>{const L=b[k].sort((a,b)=>a.date-b.date),liq=sum(L,x=>x.liquido);acc+=liq;
-    const det=L.map(x=>`<div class="row"><span><i class="dot" style="background:${x.inv._c}"></i>${brDate(x.date)} · ${esc(x.inv.nome)}</span><span class="num">${BRL(x.liquido)}${x.ir>0?` <span class="note">(I.R. ${BRL(x.ir)})</span>`:''}</span></div>`).join('');
-    return`<tr><td><details><summary>${monthLabel(k)}</summary><div style="min-width:290px;margin-top:6px;font-weight:400">${det||'<span class="note">Sem pagamentos</span>'}</div></details></td><td>${BRL(sum(L,x=>x.rend))}</td><td class="neg">${BRL(sum(L,x=>x.ir))}</td><td>${BRL(sum(L,x=>x.rend-x.ir))}</td><td>${BRL(sum(L,x=>x.principal))}</td><td><b>${BRL(liq)}</b></td><td class="m">${BRL(acc)}</td></tr>`}).join('');
-  const t=f=>sum(fut,f);
+  const series=chartSeries(months,b),t=f=>sum(fut,f);
+  const rows=months.map(k=>{const L=b[k].sort((a,c)=>a.date-c.date);
+    const byD={};L.forEach(x=>{const d=iso(x.date);byD[d]=byD[d]||{liq:0,ir:0};byD[d].liq+=x.liquido;byD[d].ir+=x.ir});
+    const det=Object.entries(byD).map(([d,v])=>`<div class="row"><span>${brDate(D(d))}</span><span class="num">${BRL(v.liq)}${v.ir>0?` <span class="note">(I.R. ${BRL(v.ir)})</span>`:''}</span></div>`).join('');
+    return`<tr><td><details><summary>${monthLabel(k)}</summary><div style="min-width:250px;margin-top:6px;font-weight:400">${det||'<span class="note">Sem pagamentos</span>'}</div></details></td><td>${BRL(sum(L,x=>x.rend-x.ir))}</td><td class="neg">${BRL(sum(L,x=>x.ir))}</td><td>${BRL(sum(L,x=>x.principal))}</td><td><b>${BRL(sum(L,x=>x.liquido))}</b></td></tr>`}).join('');
   return`<div class="view"><div class="grid k4 stagger">
-   <div class="card kpi" style="--i:0"><div class="l">Rendimento bruto</div><div class="v">${cnt(t(x=>x.rend))}</div></div>
-   <div class="card kpi bad" style="--i:1"><div class="l">I.R. retido</div><div class="v neg">− ${cnt(t(x=>x.ir))}</div></div>
+   <div class="card kpi" style="--i:0"><div class="l">Renda líquida (juros)</div><div class="v">${cnt(t(x=>x.rend-x.ir))}</div></div>
+   <div class="card kpi bad" style="--i:1"><div class="l">I.R. retido</div><div class="v neg">${cnt(t(x=>x.ir))}</div></div>
    <div class="card kpi" style="--i:2"><div class="l">Capital devolvido</div><div class="v">${cnt(t(x=>x.principal))}</div></div>
-   <div class="card kpi" style="--i:3"><div class="l">Total líquido a receber</div><div class="v pos">${cnt(t(x=>x.liquido))}</div></div></div>
-  <div><h2 class="sec">${ico('chart')}Até o último vencimento</h2><div class="card">${stackedBars('c2',months,[sR,sC],270)}${legend([sR,sC])}</div></div>
-  <div><h2 class="sec">${ico('cal')}Mês a mês</h2><div class="card"><div class="scroll"><table><thead><tr><th>Mês</th><th>Rend. bruto</th><th>I.R.</th><th>Rend. líq.</th><th>Capital</th><th>Total líq.</th><th>Acumulado</th></tr></thead><tbody>${rows}</tbody>
-  <tfoot><tr><th>Total</th><th>${BRL(t(x=>x.rend))}</th><th class="neg">${BRL(t(x=>x.ir))}</th><th>${BRL(t(x=>x.rend-x.ir))}</th><th>${BRL(t(x=>x.principal))}</th><th>${BRL(t(x=>x.liquido))}</th><th></th></tr></tfoot></table></div>
-  <p class="note" style="margin:10px 0 0">Toque no mês para ver cada pagamento. São estimativas; vale o que a Inco informar.</p></div></div></div>`;
+   <div class="card kpi" style="--i:3"><div class="l">Total que vou receber</div><div class="v pos">${cnt(t(x=>x.liquido))}</div></div></div>
+  <div><h2 class="sec">${ico('chart')}Mês a mês até o último vencimento</h2><div class="card"><div class="toolbar" style="margin-bottom:12px"><span class="note">Valores líquidos</span><span class="sp"></span>${capToggle()}</div>${stackedBars('c2',months,series,250)}${legend(series)}</div></div>
+  <div><h2 class="sec">${ico('cal')}Detalhe por mês</h2><div class="card"><div class="scroll"><table><thead><tr><th>Mês</th><th>Renda</th><th>I.R.</th><th>Capital</th><th>Total</th></tr></thead><tbody>${rows}</tbody>
+  <tfoot><tr><th>Total</th><th>${BRL(t(x=>x.rend-x.ir))}</th><th class="neg">${BRL(t(x=>x.ir))}</th><th>${BRL(t(x=>x.principal))}</th><th>${BRL(t(x=>x.liquido))}</th></tr></tfoot></table></div>
+  <p class="note" style="margin:10px 0 0">Toque no mês para ver as datas. São estimativas; vale o que a Inco informar.</p></div></div></div>`;
 }
 function viewInv(){
   if(!INVS.length)return emptyState();
